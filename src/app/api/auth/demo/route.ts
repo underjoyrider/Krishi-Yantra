@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { DEMO_FARMER_PHONE, DEMO_STAFF_PHONE } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
