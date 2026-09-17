@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String          @id @default(cuid())
+  name           String
+  phone          String          @unique
+  phoneNumber    String?
+  customerId     String?         @unique
+  email          String?
+  village        String?
+  district       String?         @default("Mandya")
+  state          String?         @default("Karnataka")
+  role               String          @default("FARMER") // FARMER, VENDOR, STAFF, ADMIN
+  passwordHash       String?
+  aadhaarHash        String?
+  aadhaarLast4       String?         @default("1234")
+  aadhaarVerified    Boolean         @default(false)
+  mobileVerified     Boolean         @default(false)
+  verificationStatus String          @default("VERIFIED") // UNVERIFIED, PENDING, VERIFIED
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @default(now()) @updatedAt
+  farmerProfile      FarmerProfile?
+  notifications      Notification[]
+  bookings           Booking[]
+  queueEntries       QueueEntry[]
+  supportTickets     SupportTicket[]
+}
+
+model FarmerProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  village   String
+  district  String?  @default("Mandya")
+  state     String?  @default("Karnataka")
+  cropType  String
+  language  String   @default("en") // en, hi, kn
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model ProcurementCenter {
+  id                    String       @id @default(cuid())
+  name                  String
+  code                  String       @unique
+  address               String
+  village               String?      @default("Mandya")
+  district              String?      @default("Mandya")
+  state                 String?      @default("Karnataka")
+  latitude              Float
+  longitude             Float
+  capacity              Int          @default(135)
+  dailyCapacity         Int          @default(135)
+  activeCounters        Int          @default(3)
+  avgProcessMins        Int          @default(5)
+  averageProcessingTime Int          @default(5)
+  currentQueueCount     Int          @default(0)
+  status                String       @default("OPEN") // OPEN, BUSY, HIGH_DEMAND, CLOSED
+  openingTime           String       @default("08:00 AM")
+  closingTime           String       @default("05:00 PM")
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @default(now()) @updatedAt
+  slots                 Slot[]
+  bookings              Booking[]
+  queueEntries          QueueEntry[]
+}
+
+model Slot {
+  id          String            @id @default(cuid())
+  centerId    String
+  center      ProcurementCenter @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  date        String // YYYY-MM-DD
+  startTime   String // HH:MM AM/PM
+  endTime     String // HH:MM AM/PM
+  capacity    Int               @default(15)
+  bookedCount Int               @default(0)
+  status      String            @default("AVAILABLE") // AVAILABLE, FULL, DISABLED
+  bookings    Booking[]
+}
+
+model Booking {
+  id             String            @id @default(cuid())
+  farmerId       String
+  user           User              @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  centerId       String
+  center         ProcurementCenter @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  slotId         String?
+  slot           Slot?             @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  bookingDate    String?           // YYYY-MM-DD
+  slotStartTime  String?           // HH:MM AM/PM
+  slotEndTime    String?           // HH:MM AM/PM
+  tokenNumber    String            // e.g. "B-104", "SHIV-104"
+  status         String            @default("WAITING") // BOOKED, CHECKED_IN, WAITING, PROCESSING, COMPLETED, CANCELLED, MISSED
+  estimatedWait  Int               @default(25) // minutes
+  queuePosition  Int               @default(1)
+  cropType       String?
+  quantityKg     Int?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @default(now()) @updatedAt
+  queueEntry     QueueEntry?
+  queueEvents    QueueEvent[]
+  notifications  Notification[]
+  supportTickets SupportTicket[]
+}
+
+model QueueEntry {
+  id                String            @id @default(cuid())
+  centerId          String
+  center            ProcurementCenter @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  farmerId          String
+  farmer            User              @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  bookingId         String            @unique
+  booking           Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  queuePosition     Int               @default(1)
+  status            String            @default("WAITING") // WAITING, PROCESSING, COMPLETED, CANCELLED, MISSED
+  estimatedWaitTime Int               @default(15) // minutes
+  checkInTime       DateTime?
+  completedTime     DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @default(now()) @updatedAt
+}
+
+model QueueEvent {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  oldStatus String
+  newStatus String
+  timestamp DateTime @default(now())
+  note      String?
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  title     String
+  message   String
+  type      String   // QUEUE_UPDATE, BOOKING_CONFIRMATION, REMINDER, CENTER_ALERT, GENERAL
+  read      Boolean  @default(false)
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model SupportTicket {
+  id           String           @id @default(cuid())
+  ticketNumber String           @unique // e.g. "KQ-10482"
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookingId    String?
+  booking      Booking?         @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  category     String           // Booking, Token, Queue, Notification, Center, Account, Other
+  description  String
+  status       String           @default("SUBMITTED") // SUBMITTED, IN_PROGRESS, RESOLVED, CLOSED
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @default(now()) @updatedAt
+  messages     SupportMessage[]
+}
+
+model SupportMessage {
+  id         String        @id @default(cuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderType String        // FARMER, SUPPORT
+  senderName String?
+  message    String
+  createdAt  DateTime      @default(now())
+}
+
+model OtpVerification {
+  id           String   @id @default(cuid())
+  phone        String
+  otpHash      String
+  aadhaarLast4 String?
+  attempts     Int      @default(0)
+  expiresAt    DateTime
+  verified     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}
+
+model QueueObservation {
+  id                    String   @id @default(cuid())
+  customerId            String   @unique
+  customerName          String
+  centreId              String
+  centreName            String
+  bookingDate           String
+  hourOfDay             Int
+  dayOfWeek             Int
+  peakHour              Int
+  tokenNumber           Int
+  tokensAhead           Int
+  queueLength           Int
+  activeCounters        Int
+  crop                  String
+  quantityKg            Float
+  qualityGrade          String
+  staffExperienceYears  Int
+  estimatedTimeMin      Float
+  actualWaitTimeMin     Float
+  processingTimeMin     Float
+  totalTimeAtCentreMin  Float
+  createdAt             DateTime @default(now())
+}
+
